@@ -2050,21 +2050,34 @@
 
   // ── CHECK SESSION ON LOAD ────────────────────────────────────
   async function checkSession() {
+    if (window.location.hash.includes('type=recovery')) return;
+
     const { data: { session } } = await sb.auth.getSession();
-    if (session) {
-      const name = session.user.user_metadata?.full_name || session.user.email.split('@')[0];
-      const hasOnboarded = session.user.user_metadata?.onboarded;
-      updateDashboardUser(name);
-      if (hasOnboarded) {
-        navHistory.push('dashboard');
-        showPage('dashboard');
-      } else {
-        navHistory.push('onboarding');
-        showPage('onboarding');
-        initOnboarding();
-      }
-    } else {
+    const hasActiveSession = !!(
+      session?.access_token &&
+      session?.user?.id &&
+      (!session.expires_at || session.expires_at * 1000 > Date.now())
+    );
+
+    if (!hasActiveSession) {
+      if (session) await sb.auth.signOut();
+      navHistory.length = 0;
+      navHistory.push('home');
       showPage('home');
+      return;
+    }
+
+    const name = session.user.user_metadata?.full_name || session.user.email.split('@')[0];
+    const hasOnboarded = session.user.user_metadata?.onboarded;
+    updateDashboardUser(name);
+    navHistory.length = 0;
+    if (hasOnboarded) {
+      navHistory.push('dashboard');
+      showPage('dashboard');
+    } else {
+      navHistory.push('onboarding');
+      showPage('onboarding');
+      initOnboarding();
     }
   }
 
