@@ -38,7 +38,7 @@
   .page.active { display: block; }
 
   /* ── AUTH PAGES ───────────────────────────── */
-  #page-login, #page-signup, #page-forgot {
+  #page-login, #page-signup, #page-forgot, #page-new-password {
     display: none;
     min-height: 100vh;
     align-items: center;
@@ -46,7 +46,7 @@
     padding: 2rem 1.25rem;
     flex-direction: column;
   }
-  #page-login.active, #page-signup.active, #page-forgot.active {
+  #page-login.active, #page-signup.active, #page-forgot.active, #page-new-password.active {
     display: flex;
     animation: pageIn 0.35s ease forwards;
   }
@@ -1316,6 +1316,33 @@
 </div>
 
 <!-- ============================================================
+     PAGE: NEW PASSWORD
+============================================================ -->
+<div id="page-new-password" class="page">
+  <div class="auth-wrap">
+    <div class="auth-logo">Zenit</div>
+    <div class="auth-tagline">Your personal gym coach</div>
+
+    <div class="auth-title">Choose a new password</div>
+    <p class="auth-sub">Enter your new password below.</p>
+
+    <div class="auth-error" id="new-password-error"></div>
+    <div class="auth-success" id="new-password-success"></div>
+
+    <div class="auth-field">
+      <label class="auth-label">New password</label>
+      <input class="auth-input" type="password" id="new-password-input" placeholder="At least 6 characters" />
+    </div>
+
+    <button class="auth-btn" id="new-password-btn" onclick="handleNewPassword()">Save new password</button>
+
+    <div class="auth-switch">
+      <span class="auth-switch-link" onclick="goTo('login')">Back to log in</span>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
      PAGE 1: HOMEPAGE
 ============================================================ -->
 <div id="page-home" class="page active">
@@ -1931,6 +1958,30 @@
     document.getElementById('signup-btn').disabled = true;
   }
 
+  async function handleNewPassword() {
+    hideAuthMessages('new-password');
+    const password = document.getElementById('new-password-input').value;
+    if (password.length < 6) return showAuthError('new-password', 'Password must be at least 6 characters.');
+
+    setAuthLoading('new-password-btn', true, 'Save new password');
+    const { error } = await sb.auth.updateUser({ password });
+    setAuthLoading('new-password-btn', false, 'Save new password');
+
+    if (error) return showAuthError('new-password', error.message);
+
+    await sb.auth.signOut();
+    window.history.replaceState(null, '', window.location.pathname + window.location.search);
+
+    hideAuthMessages('login');
+    const successEl = document.getElementById('login-success');
+    successEl.textContent = '✓ Password updated! You can now log in with your new password.';
+    successEl.classList.add('visible');
+
+    navHistory.length = 0;
+    navHistory.push('login');
+    showPage('login');
+  }
+
   async function handleForgotPassword() {
     hideAuthMessages('forgot');
     const email = document.getElementById('forgot-email').value.trim();
@@ -2018,7 +2069,15 @@
   }
 
   // ── INIT ─────────────────────────────────────────────────────
-  window.addEventListener('load', () => {
+  window.addEventListener('load', async () => {
+    if (window.location.hash.includes('type=recovery')) {
+      await sb.auth.getSession();
+      navHistory.length = 0;
+      navHistory.push('new-password');
+      showPage('new-password');
+      return;
+    }
+
     // Skip intro animation if already seen
     if (localStorage.getItem('zenit_intro_seen')) {
       const intro = document.querySelector('.intro');
