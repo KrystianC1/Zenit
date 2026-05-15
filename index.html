@@ -38,7 +38,7 @@
   .page.active { display: block; }
 
   /* ── AUTH PAGES ───────────────────────────── */
-  #page-login, #page-signup {
+  #page-login, #page-signup, #page-reset, #page-new-password {
     display: none;
     min-height: 100vh;
     align-items: center;
@@ -46,7 +46,7 @@
     padding: 2rem 1.25rem;
     flex-direction: column;
   }
-  #page-login.active, #page-signup.active {
+  #page-login.active, #page-signup.active, #page-reset.active, #page-new-password.active {
     display: flex;
     animation: pageIn 0.35s ease forwards;
   }
@@ -78,6 +78,15 @@
   }
 
   .auth-field { margin-bottom: 1rem; }
+
+  .auth-forgot {
+    text-align: right; margin: -0.25rem 0 0.75rem;
+  }
+  .auth-forgot-link {
+    font-size: 0.78rem; color: var(--muted);
+    cursor: pointer; transition: color 0.2s;
+  }
+  .auth-forgot-link:hover { color: var(--white); }
 
   .auth-label {
     display: block; font-size: 0.72rem; letter-spacing: 0.12em;
@@ -1230,6 +1239,7 @@
       <label class="auth-label">Password</label>
       <input class="auth-input" type="password" id="login-password" placeholder="••••••••" />
     </div>
+    <div class="auth-forgot"><span class="auth-forgot-link" onclick="goTo('forgot')">Forgot password?</span></div>
 
     <button class="auth-btn" id="login-btn" onclick="handleLogin()">Log in</button>
 
