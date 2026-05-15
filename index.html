@@ -1440,7 +1440,7 @@
   </div>
 
   <div class="dash-main">
-    <p class="dash-greeting" id="dash-date">Wednesday, 14 May</p>
+    <p class="dash-greeting" id="dash-date"></p>
     <h1 class="dash-title" id="dash-title-greeting">Good morning, there 👋</h1>
 
     <div class="week-strip">
@@ -1468,11 +1468,11 @@
 
     <p class="section-label">This week</p>
     <div class="week-grid">
-      <div class="day-row completed-row"><span class="day-label">MON</span><span class="day-name">Full Body — Foundation</span><span class="day-status status-done">✓ Done</span></div>
-      <div class="day-row completed-row"><span class="day-label">TUE</span><span class="day-name">Lower Body — Legs & Core</span><span class="day-status status-done">✓ Done</span></div>
-      <div class="day-row today-row" id="dash-today-row"><span class="day-label">WED</span><span class="day-name">Upper Body — Push & Pull</span><span class="day-status status-today" id="dash-today-status">Today</span></div>
+      <div class="day-row locked-row" data-week="1" data-day="1"><span class="day-label">MON</span><span class="day-name">Full Body — Foundation</span><span class="day-status status-locked">🔒</span></div>
+      <div class="day-row locked-row" data-week="1" data-day="2"><span class="day-label">TUE</span><span class="day-name">Lower Body — Legs & Core</span><span class="day-status status-locked">🔒</span></div>
+      <div class="day-row today-row" id="dash-today-row" data-week="1" data-day="3"><span class="day-label">WED</span><span class="day-name">Upper Body — Push & Pull</span><span class="day-status status-today" id="dash-today-status">Today</span></div>
       <div class="day-row rest-row"><span class="day-label">THU</span><span class="day-name">Rest day</span><span class="day-status status-rest">Rest</span></div>
-      <div class="day-row locked-row"><span class="day-label">FRI</span><span class="day-name">Full Body — Strength</span><span class="day-status status-locked">🔒</span></div>
+      <div class="day-row locked-row" data-week="1" data-day="5"><span class="day-label">FRI</span><span class="day-name">Full Body — Strength</span><span class="day-status status-locked">🔒</span></div>
       <div class="day-row rest-row"><span class="day-label">SAT</span><span class="day-name">Rest day</span><span class="day-status status-rest">Rest</span></div>
       <div class="day-row rest-row"><span class="day-label">SUN</span><span class="day-name">Rest day</span><span class="day-status status-rest">Rest</span></div>
     </div>
@@ -1678,6 +1678,7 @@
     window.scrollTo(0, 0);
     if (pageId === 'workout') initWorkout();
     if (pageId === 'onboarding') initOnboarding();
+    if (pageId === 'dashboard') initDashboard();
   }
 
   // ── ONBOARDING ───────────────────────────────────────────────
@@ -1730,7 +1731,7 @@
           <div class="ob-summary-title">Your plan is<span> ready.</span></div>
           <p class="ob-summary-sub">Everything looks good — let's build your personal 4-week program.</p>
           <div class="ob-summary-answers">${rows}</div>
-          <button class="btn-primary" onclick="goTo('dashboard')">Generate my program →</button>
+          <button class="btn-primary" onclick="completeOnboarding()">Generate my program →</button>
         </div>`;
       return;
     }
@@ -1770,28 +1771,143 @@
   function obNext() { if (!obAnswers[questions[obCurrent].id]) return; obCurrent++; renderOb(); }
   function obBack() { if (obCurrent === 0) return; obCurrent--; renderOb(); }
 
+  function userHasOnboarded(user) {
+    return user?.user_metadata?.onboarded === true;
+  }
+
+  async function completeOnboarding() {
+    const { error } = await sb.auth.updateUser({ data: { onboarded: true } });
+    if (error) {
+      console.error('Failed to save onboarding:', error.message);
+      return;
+    }
+    navHistory.length = 0;
+    navHistory.push('dashboard');
+    showPage('dashboard');
+  }
+
   // ── DASHBOARD ────────────────────────────────────────────────
+  const DASH_CURRENT_WEEK = 1;
+  const DASH_CURRENT_DAY = 3;
+  const DASH_WEEK_WORKOUTS = 5;
   let dashDone = false;
 
-  function dashMarkDone() {
-    if (dashDone) return;
+  function formatDashDate() {
+    return new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+  }
+
+  function setTodayCardDone() {
     dashDone = true;
-
-    const card = document.getElementById('dash-today-card');
-    card.classList.add('done');
+    document.getElementById('dash-today-card').classList.add('done');
     document.getElementById('dash-today-day').style.color = 'rgba(245,242,238,0.3)';
-    document.getElementById('dash-today-actions').innerHTML = `
-      <div class="done-badge"><div class="done-check">✓</div>Workout completed today</div>`;
-    document.getElementById('dash-week-bar').style.width = '60%';
-    document.getElementById('dash-week-pct').textContent = '3 of 5 done';
+    document.getElementById('dash-today-actions').innerHTML =
+      '<div class="done-badge"><div class="done-check">✓</div>Workout completed today</div>';
+  }
 
-    const row = document.getElementById('dash-today-row');
-    row.classList.remove('today-row');
-    row.classList.add('completed-row');
-    const s = document.getElementById('dash-today-status');
-    s.className = 'day-status status-done';
-    s.textContent = '✓ Done';
+  function setTodayCardActive() {
+    dashDone = false;
+    document.getElementById('dash-today-card').classList.remove('done');
+    document.getElementById('dash-today-day').style.color = '';
+    document.getElementById('dash-today-actions').innerHTML =
+      '<button class="btn-start" onclick="goTo(\'workout\')">Start workout →</button>' +
+      '<button class="btn-mark-done" onclick="dashMarkDone()">Mark done</button>';
+  }
 
+  function updateWeekStrip(completedCount) {
+    const pct = Math.round((completedCount / DASH_WEEK_WORKOUTS) * 100);
+    document.getElementById('dash-week-bar').style.width = pct + '%';
+    document.getElementById('dash-week-pct').textContent =
+      completedCount + ' of ' + DASH_WEEK_WORKOUTS + ' done';
+  }
+
+  function applyDayRowState(row, { completed, isToday }) {
+    const status = row.querySelector('.day-status');
+    row.classList.remove('today-row', 'completed-row', 'locked-row');
+    if (completed) {
+      row.classList.add('completed-row');
+      status.className = 'day-status status-done';
+      status.textContent = '✓ Done';
+    } else if (isToday) {
+      row.classList.add('today-row');
+      status.className = 'day-status status-today';
+      status.textContent = 'Today';
+    } else {
+      row.classList.add('locked-row');
+      status.className = 'day-status status-locked';
+      status.textContent = '🔒';
+    }
+  }
+
+  function applyDashboardProgress(records) {
+    const weekRecords = records.filter(r => r.week === DASH_CURRENT_WEEK && r.completed);
+    const completedDays = new Set(weekRecords.map(r => r.day));
+
+    document.querySelectorAll('.week-grid .day-row[data-day]').forEach(row => {
+      const day = parseInt(row.dataset.day, 10);
+      applyDayRowState(row, {
+        completed: completedDays.has(day),
+        isToday: day === DASH_CURRENT_DAY && !completedDays.has(day)
+      });
+    });
+
+    if (completedDays.has(DASH_CURRENT_DAY)) setTodayCardDone();
+    else setTodayCardActive();
+
+    updateWeekStrip(completedDays.size);
+  }
+
+  async function loadDashboardProgress() {
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) return;
+
+    const { data, error } = await sb
+      .from('progress')
+      .select('week, day, completed')
+      .eq('user_id', session.user.id);
+
+    if (error) {
+      console.error('Failed to load progress:', error.message);
+      return;
+    }
+
+    applyDashboardProgress(data || []);
+  }
+
+  async function initDashboard() {
+    document.getElementById('dash-date').textContent = formatDashDate();
+    await loadDashboardProgress();
+  }
+
+  async function dashMarkDone() {
+    if (dashDone) return;
+
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) return;
+
+    const { error } = await sb.from('progress').insert({
+      user_id: session.user.id,
+      week: DASH_CURRENT_WEEK,
+      day: DASH_CURRENT_DAY,
+      completed: true,
+      completed_at: new Date().toISOString()
+    });
+
+    if (error) {
+      console.error('Failed to save progress:', error.message);
+      return;
+    }
+
+    setTodayCardDone();
+    applyDayRowState(document.getElementById('dash-today-row'), { completed: true, isToday: false });
+
+    const { data } = await sb
+      .from('progress')
+      .select('week, day, completed')
+      .eq('user_id', session.user.id)
+      .eq('week', DASH_CURRENT_WEEK)
+      .eq('completed', true);
+
+    updateWeekStrip((data || []).length);
     setTimeout(() => { document.getElementById('dash-popup').classList.add('visible'); }, 400);
   }
 
@@ -2020,11 +2136,10 @@
     }
 
     const userName = data.user.user_metadata?.full_name || email.split('@')[0];
-    const hasOnboarded = data.user.user_metadata?.onboarded;
     updateDashboardUser(userName);
     navHistory.length = 0;
 
-    if (hasOnboarded) {
+    if (userHasOnboarded(data.user)) {
       navHistory.push('dashboard');
       showPage('dashboard');
     } else {
@@ -2068,10 +2183,9 @@
     }
 
     const name = session.user.user_metadata?.full_name || session.user.email.split('@')[0];
-    const hasOnboarded = session.user.user_metadata?.onboarded;
     updateDashboardUser(name);
     navHistory.length = 0;
-    if (hasOnboarded) {
+    if (userHasOnboarded(session.user)) {
       navHistory.push('dashboard');
       showPage('dashboard');
     } else {
